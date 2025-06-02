@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<module>
+    <name>minwartosczproduktem</name>
+    <displayName><![CDATA[Minimalna Wartość Koszyka z Produktem]]></displayName>
+    <version><![CDATA[1.0.0]]></version>
+    <description><![CDATA[Sprawdza warunki w koszyku dotyczące konkretnego produktu i minimalnej wartości pozostałych produktów.]]></description>
+    <author><![CDATA[BESTLAB Ernest]]></author>
+    <tab><![CDATA[front_office_features]]></tab>
+    <is_configurable>1</is_configurable>
+    <need_instance>1</need_instance>
+    <ps_versions_compliancy>
+        <min>8.0.0</min>
+        <max>_PS_VERSION_</max>
+    </ps_versions_compliancy>
+</module>
