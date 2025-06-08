@@ -1,5 +1,7 @@
 Prestashop 8.2, PHP 8.1
-Minimoduł umożliwia wybranie z listy rozwijanej w panelu administracyjnym prestashop jeden produkt i podanie wartości zamówienia. W koszyku klienta moduł nie dopuszcza złożenie zamówienia, jeśli łączna wartość koszyka bez kosztów dostawy i nie wliczając wybranego produktu będzie niższa niż zadana w panelu administratora. 
+Minimoduł umożliwia wybranie z listy rozwijanej w panelu administracyjnym prestashop jeden produkt i podanie wartości zamówienia. 
+W koszyku klienta moduł nie dopuszcza złożenie zamówienia, jeśli łączna wartość koszyka bez kosztów dostawy i nie wliczając wybranego produktu będzie niższa niż zadana w panelu administratora, a w koszyku znajdzie się ten wybrany produkt. 
+Limit zadziała tylko wtedy, gdy w koszyku znajduje się ten jeden wskazany produkt, którego limit dotyczy, gdy go usuwamy, limity koszyka nie dotyczą.
 Wtedy wyświetla stosowne komunikaty w koszyku i ukrywa przycisk 'realizuj zamówienie'. Jeśli wartość w koszyku zwiększamy, po osiągnięciu minimum komunikat znika, a przycisk 'realizuj' się pojawia. 
 W pliku motywu /checkout/_partials/cart-detailed-actions.tpl, wskutek logistyki dodaliśmy ID:
 id="cart-actions-container-mwzp"
