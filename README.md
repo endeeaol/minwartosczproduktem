@@ -1,4 +1,4 @@
-```
+
 <p><strong>Minimalna wartość koszyka, gdy znajduje się w nim wskazany produkt. Prestashop 8.2, PHP 8.1</strong></p>
 <p>Minimoduł umożliwia wybranie z listy rozwijanej w panelu administracyjnym prestashop jeden produkt i podanie wartości zamówienia. </p>
 <p>W koszyku klienta moduł nie dopuszcza złożenie zamówienia, jeśli łączna wartość koszyka bez kosztów dostawy i nie wliczając wybranego produktu będzie niższa niż zadana w panelu administratora, a w koszyku znajdzie się ten wybrany produkt. </p>
@@ -7,7 +7,7 @@
 <p>W pliku motywu /checkout/_partials/cart-detailed-actions.tpl, wskutek logistyki dodaliśmy ID:<br>
 id="cart-actions-container-mwzp"<br>
 id="main-checkout-button-mwzp"</p>
-```
+
 
 ```smarty
 {block name='cart_detailed_actions'}
