@@ -4,7 +4,7 @@ Wtedy wyświetla stosowne komunikaty w koszyku i ukrywa przycisk 'realizuj zamó
 W pliku motywu /checkout/_partials/cart-detailed-actions.tpl, wskutek logistyki dodaliśmy ID:
 id="cart-actions-container-mwzp"
 id="main-checkout-button-mwzp"
-
+```
 {block name='cart_detailed_actions'}
   <div id="cart-actions-container-mwzp" class="checkout cart-detailed-actions js-cart-detailed-actions card-block">
     {if $cart.minimalPurchaseRequired}
@@ -26,4 +26,4 @@ id="main-checkout-button-mwzp"
     {/if}
   </div>
 {/block}
- 
+ ```
