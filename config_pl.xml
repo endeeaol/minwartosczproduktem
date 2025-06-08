@@ -2,9 +2,9 @@
 <module>
     <name>minwartosczproduktem</name>
     <displayName><![CDATA[Minimalna Wartość Koszyka z Produktem]]></displayName>
-    <version><![CDATA[1.0.1]]></version>
+    <version><![CDATA[1.0.10]]></version>
     <description><![CDATA[Blokuje zam&oacute;wienie, jeśli określony produkt jest w koszyku, a reszta zam&oacute;wienia (z podatkiem, po rabatach) nie osiąga minimalnej kwoty.]]></description>
-    <author><![CDATA[Twoje Imię]]></author>
+    <author><![CDATA[BESTLAB Ernest]]></author>
     <tab><![CDATA[front_office_features]]></tab>
     <is_configurable>1</is_configurable>
     <need_instance>1</need_instance>

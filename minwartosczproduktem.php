@@ -13,8 +13,8 @@ class MinWartoscZProduktem extends Module
     {
         $this->name = 'minwartosczproduktem';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.1'; // Zwiększona wersja po zmianach
-        $this->author = 'Twoje Imię';
+        $this->version = '1.0.10'; // Kolejna próba z zakładkami
+        $this->author = 'BESTLAB Ernest';
         $this->need_instance = 1;
         $this->bootstrap = true;
 
@@ -22,7 +22,6 @@ class MinWartoscZProduktem extends Module
 
         $this->displayName = $this->l('Minimalna Wartość Koszyka z Produktem');
         $this->description = $this->l('Blokuje zamówienie, jeśli określony produkt jest w koszyku, a reszta zamówienia (z podatkiem, po rabatach) nie osiąga minimalnej kwoty.');
-
         $this->ps_versions_compliancy = ['min' => '8.0.0', 'max' => _PS_VERSION_];
     }
 
@@ -30,28 +29,149 @@ class MinWartoscZProduktem extends Module
     {
         if (!parent::install() ||
             !$this->registerHook('displayShoppingCartFooter') ||
-            !$this->registerHook('actionFrontControllerSetMedia')) {
+            !$this->registerHook('actionFrontControllerSetMedia') ||
+            !$this->installTabs()) { // Wywołujemy naszą nową metodę
             return false;
         }
         Configuration::updateValue(self::CONFIG_PRODUCT_ID, 0);
         Configuration::updateValue(self::CONFIG_MIN_AMOUNT, 0);
-        return true;
+        return true; 
     }
-
+    
     public function uninstall()
     {
+        if (!$this->uninstallTabs()) { // Wywołujemy naszą nową metodę
+             PrestaShopLogger::addLog('MWZP: Nie udało się odinstalować zakładek.', 2, null, null, null, true);
+        }
         Configuration::deleteByName(self::CONFIG_PRODUCT_ID);
         Configuration::deleteByName(self::CONFIG_MIN_AMOUNT);
         return parent::uninstall();
     }
 
+    protected function installTabs()
+    {
+        $languages = Language::getLanguages(true); // true aby dostać wszystkie, aktywne i nieaktywne
+        
+        // Nazwa techniczna dla "dummy" kontrolera (bez "Controller" na końcu)
+        $moduleControllerClassName = 'AdminMinWartoscZProduktemCustomConfig';
+        $moduleTabDisplayName = $this->l('Limit kwotowy zamówienia');
+
+        // 1. Stwórz zakładkę dla naszego "dummy" kontrolera
+        // Sprawdź, czy już nie istnieje
+        $tabId = (int)Tab::getIdFromClassName($moduleControllerClassName);
+        if (!$tabId) {
+            $tab = new Tab();
+            $tab->class_name = $moduleControllerClassName;
+            $tab->module = $this->name; // Powiązanie z modułem jest ważne dla ModuleAdminController
+            $tab->id_parent = 0; // Tymczasowo top-level lub pod sekcją "Ulepszenia" (CONFIGURE)
+                                 // $tab->id_parent = (int)Tab::getIdFromClassName('CONFIGURE');
+            $tab->active = 1;
+            foreach ($languages as $lang) {
+                $tab->name[$lang['id_lang']] = $moduleTabDisplayName;
+            }
+            if (!$tab->add()) {
+                $this->_errors[] = $this->l('Nie udało się utworzyć zakładki modułu: ') . $moduleTabDisplayName;
+                return false;
+            }
+            $tabId = $tab->id; // Pobierz ID nowo utworzonej zakładki
+        } else {
+            // Zakładka już istnieje, upewnij się, że jest aktywna i ma poprawną nazwę
+            $tab = new Tab($tabId);
+            $tab->active = 1;
+            foreach ($languages as $lang) {
+                $tab->name[$lang['id_lang']] = $moduleTabDisplayName;
+            }
+            $tab->update(); // Zaktualizuj istniejącą
+        }
+        
+
+        // 2. Znajdź lub utwórz grupę "Skrypty własne"
+        $parentTabClassName = 'AdminParentOwnScripts';
+        $parentTabDisplayName = $this->l('Skrypty własne');
+        $parentTabId = (int)Tab::getIdFromClassName($parentTabClassName);
+
+        if (!$parentTabId) {
+            $parentTab = new Tab();
+            $parentTab->class_name = $parentTabClassName;
+            $parentTab->module = ''; // To jest pusta zakładka-kontener
+            // Umieśćmy "Skrypty własne" w sekcji "Ulepszenia" (Improve)
+            $improveSectionParentId = (int)Tab::getIdFromClassName('CONFIGURE');
+            if (!$improveSectionParentId) { // Fallback
+                $improveSectionParentId = (int)Tab::getIdFromClassName('AdminParentModulesSf');
+                 if (!$improveSectionParentId) { $improveSectionParentId = 0; }
+            }
+            $parentTab->id_parent = $improveSectionParentId; 
+            $parentTab->active = 1;
+            $parentTab->icon = 'icon-cogs'; // Ikona dla grupy
+            foreach ($languages as $lang) {
+                $parentTab->name[$lang['id_lang']] = $parentTabDisplayName;
+            }
+            if (!$parentTab->add()) {
+                $this->_errors[] = $this->l('Nie udało się utworzyć nadrzędnej zakładki grupy: ') . $parentTabDisplayName;
+                // Jeśli nie udało się utworzyć grupy, usuń wcześniej utworzoną zakładkę modułu, aby nie została osierocona
+                if (isset($tab) && $tab->id) { $tab->delete(); }
+                return false;
+            }
+            $parentTabId = $parentTab->id;
+        }
+
+        // 3. Przenieś/upewnij się, że zakładka modułu jest pod grupą "Skrypty własne"
+        // Musimy załadować obiekt Tab ponownie, jeśli był tylko ID
+        if (!isset($tab) || !$tab->id) { // Jeśli zakładka istniała i nie tworzyliśmy jej obiektu
+            $tab = new Tab($tabId);
+        }
+        
+        if ($tab->id_parent != $parentTabId) {
+            $tab->id_parent = $parentTabId;
+            if (!$tab->update()) {
+                $this->_errors[] = $this->l('Nie udało się przenieść zakładki modułu do grupy.');
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    protected function uninstallTabs()
+    {
+        $moduleControllerClassName = 'AdminMinWartoscZProduktemCustomConfig';
+        $tabId = (int)Tab::getIdFromClassName($moduleControllerClassName);
+        if ($tabId) {
+            $tab = new Tab($tabId);
+            if (Validate::isLoadedObject($tab)) {
+                $tab->delete(); // Błąd nie powinien zatrzymać deinstalacji reszty
+            }
+        }
+
+        // Opcjonalnie: usuń grupę "Skrypty własne", jeśli jest pusta.
+        // Kod z Twojego przykładu jest dobry, ale uproszczę go lekko.
+        $parentTabClassName = 'AdminParentOwnScripts';
+        $parentTabId = (int)Tab::getIdFromClassName($parentTabClassName);
+        if ($parentTabId) {
+            // Sprawdź, czy są jakieś inne aktywne zakładki pod tym rodzicem
+            $children = Tab::getTabs($this->context->language->id, $parentTabId);
+            if (empty($children)) { // Jeśli nie ma dzieci, usuń rodzica
+                $parentTab = new Tab($parentTabId);
+                if (Validate::isLoadedObject($parentTab)) {
+                    $parentTab->delete();
+                }
+            }
+        }
+        return true;
+    }
+
+    // getContent() i reszta metod (renderForm, hooki) pozostają takie same jak w ostatniej działającej wersji front-endu
+    // Poniżej wklejam je dla kompletności, zakładając, że są to te wersje, które dobrze działały na froncie.
+
     public function getContent()
     {
+        // Ta metoda jest teraz wywoływana, gdy PrestaShop kieruje na konfigurację modułu,
+        // np. przez AdminModules&configure=minwartosczproduktem.
+        // Nasz "dummy" kontroler AdminMinWartoscZProduktemCustomConfigController też tutaj przekierowuje.
         $output = '';
         if (Tools::isSubmit('submit' . $this->name)) {
             $productId = (int)Tools::getValue(self::CONFIG_PRODUCT_ID);
-            $minAmount = (float)str_replace(',', '.', Tools::getValue(self::CONFIG_MIN_AMOUNT)); // Akceptuj przecinek jako separator
-
+            $minAmount = (float)str_replace(',', '.', Tools::getValue(self::CONFIG_MIN_AMOUNT)); 
             Configuration::updateValue(self::CONFIG_PRODUCT_ID, $productId);
             Configuration::updateValue(self::CONFIG_MIN_AMOUNT, $minAmount);
             $output .= $this->displayConfirmation($this->l('Ustawienia zaktualizowane'));
@@ -69,7 +189,6 @@ class MinWartoscZProduktem extends Module
         $helper->default_form_language = (int)Configuration::get('PS_LANG_DEFAULT');
         $helper->title = $this->displayName;
         $helper->submit_action = 'submit' . $this->name;
-
         $products = Product::getProducts($this->context->language->id, 0, 0, 'id_product', 'ASC', false, true);
         $productOptions = [];
         $productOptions[] = ['id_option' => 0, 'name' => $this->l('--- Wybierz produkt ---')];
@@ -79,7 +198,6 @@ class MinWartoscZProduktem extends Module
                 'name' => $product['name'] . ' (ID: ' . $product['id_product'] . ')',
             ];
         }
-        
         $fields_form[0]['form'] = [
             'legend' => [
                 'title' => $this->l('Ustawienia modułu'),
@@ -111,109 +229,62 @@ class MinWartoscZProduktem extends Module
                 'class' => 'btn btn-default pull-right',
             ],
         ];
-
         $helper->fields_value[self::CONFIG_PRODUCT_ID] = Configuration::get(self::CONFIG_PRODUCT_ID);
         $helper->fields_value[self::CONFIG_MIN_AMOUNT] = Configuration::get(self::CONFIG_MIN_AMOUNT);
-
         return $helper->generateForm($fields_form);
     }
     
-public function hookActionFrontControllerSetMedia()
-{
-    PrestaShopLogger::addLog('MWZP hookActionFrontControllerSetMedia - Strona: ' . $this->context->controller->getPageName() . ' | Controller: ' . get_class($this->context->controller), 1, null, null, null, true);
-
-    if ($this->context->controller->getPageName() === 'cart') {
-        $this->context->controller->registerJavascript(
-            'module-' . $this->name . '-front',
-            'modules/' . $this->name . '/views/js/front.js',
-            ['position' => 'bottom', 'priority' => 155]
-        );
-        PrestaShopLogger::addLog('MWZP hookActionFrontControllerSetMedia - JS (' . $this->name . '/views/js/front.js) zarejestrowany dla strony koszyka.', 1, null, null, null, true);
-
-        // Definiowanie zmiennej JavaScript z URL-em do naszego kontrolera AJAX
-        $ajaxControllerUrl = $this->context->link->getModuleLink(
-            $this->name, // Nazwa modułu
-            'ajax',     // Nazwa naszego kontrolera (bez 'ModuleFrontController' i 'MinWartoscZProduktem')
-            ['action' => 'checkCartCondition', 'ajax' => 1] // Dodatkowe parametry
-        );
-
-        Media::addJsDef(['mwzpAjaxUrl' => $ajaxControllerUrl]);
-        PrestaShopLogger::addLog('MWZP hookActionFrontControllerSetMedia - mwzpAjaxUrl zdefiniowany: ' . $ajaxControllerUrl, 1, null, null, null, true);
+    public function hookActionFrontControllerSetMedia()
+    {
+        if ($this->context->controller->getPageName() === 'cart') {
+            $this->context->controller->registerJavascript(
+                'module-' . $this->name . '-front',
+                'modules/' . $this->name . '/views/js/front.js',
+                ['position' => 'bottom', 'priority' => 155]
+            );
+            $ajaxControllerUrl = $this->context->link->getModuleLink(
+                $this->name, 
+                'ajax',     
+                ['action' => 'checkCartCondition', 'ajax' => 1, '_token' => Tools::getToken(false)] 
+            );
+            Media::addJsDef(['mwzpAjaxUrl' => $ajaxControllerUrl]);
+        }
     }
-}
 
     public function hookDisplayShoppingCartFooter($params)
     {
-        PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - START.', 1, null, null, null, true);
-
         $configuredProductId = (int)Configuration::get(self::CONFIG_PRODUCT_ID);
         $configuredMinAmount = (float)Configuration::get(self::CONFIG_MIN_AMOUNT);
-
-        PrestaShopLogger::addLog(sprintf('MWZP hookDisplayShoppingCartFooter - Configured Product ID: %d, Configured Min Amount: %.2f', $configuredProductId, $configuredMinAmount), 1, null, null, null, true);
-
         if ($configuredProductId == 0 || $configuredMinAmount <= 0) {
-            PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - Moduł nie skonfigurowany lub warunek nieaktywny. Kończenie.', 1, null, null, null, true);
             return;
         }
-
         $cart = $this->context->cart;
         if (!Validate::isLoadedObject($cart) || $cart->nbProducts() == 0) {
-             PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - Koszyk niezaładowany lub pusty. Kończenie.', 1, null, null, null, true);
             return;
         }
-
-        $cartProducts = $cart->getProducts(); // Pobierz aktualne produkty z koszyka
+        $cartProducts = $cart->getProducts(); 
         $isTargetProductInCart = false;
         $targetProductValueInCartWithTax = 0;
-
-        // Pobierz całkowitą wartość produktów w koszyku Z PODATKIEM, po rabatach
         $cartTotalProductsValueWithTax = $cart->getOrderTotal(true, Cart::ONLY_PRODUCTS);
-        PrestaShopLogger::addLog(sprintf('MWZP hookDisplayShoppingCartFooter - Cart Total (with tax, products only): %.2f', $cartTotalProductsValueWithTax), 1, null, null, null, true);
-
-        PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - Iteracja po produktach w koszyku:', 1, null, null, null, true);
         foreach ($cartProducts as $product) {
-            PrestaShopLogger::addLog(sprintf('MWZP hookDisplayShoppingCartFooter - Produkt w koszyku: ID: %d, Nazwa: %s, Ilość: %d, Cena jednostkowa (z tax): %.2f, Suma (z tax): %.2f, total_wt (z getProducts): %.2f', 
-                $product['id_product'], 
-                $product['name'], 
-                $product['quantity'],
-                $product['price_wt'], // Cena jednostkowa z podatkiem
-                $product['total_wt'], // Całkowita cena linii produktu z podatkiem (uwzględnia rabaty specyficzne dla produktu)
-                $product['total_wt'] // Dla spójności logu, to ta sama wartość
-            ), 1, null, null, null, true);
-
             if ((int)$product['id_product'] == $configuredProductId) {
                 $isTargetProductInCart = true;
-                // Używamy 'total_wt', która jest sumą dla linii produktu Z PODATKIEM, po rabatach specyficznych dla produktu
                 $targetProductValueInCartWithTax += (float)$product['total_wt'];
             }
         }
-        PrestaShopLogger::addLog(sprintf('MWZP hookDisplayShoppingCartFooter - Docelowy produkt (ID: %d) jest w koszyku: %s, Jego wartość (z tax): %.2f', $configuredProductId, $isTargetProductInCart ? 'Tak' : 'Nie', $targetProductValueInCartWithTax), 1, null, null, null, true);
-        
         $showMinAmountMessage = false;
         $message = '';
-
         if ($isTargetProductInCart) {
             $valueExcludingTargetProductWithTax = $cartTotalProductsValueWithTax - $targetProductValueInCartWithTax;
-            PrestaShopLogger::addLog(sprintf('MWZP hookDisplayShoppingCartFooter - Wartość pozostałych produktów (z tax): %.2f, Skonfigurowana min. kwota: %.2f', $valueExcludingTargetProductWithTax, $configuredMinAmount), 1, null, null, null, true);
-
             if ($valueExcludingTargetProductWithTax < $configuredMinAmount) {
                 $showMinAmountMessage = true;
-                $message = $this->l('Minimalna wartość pozostałych produktów w koszyku (z podatkiem, po rabatach) to ') . Tools::displayPrice($configuredMinAmount, $this->context->currency) . $this->l('. Obecnie jest to ') . Tools::displayPrice($valueExcludingTargetProductWithTax, $this->context->currency) . $this->l('. Dodaj więcej produktów, aby kontynuować.');
-                PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - WARUNEK NIESPEŁNIONY. Wyświetlanie wiadomości.', 1, null, null, null, true);
-            } else {
-                PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - WARUNEK SPEŁNIONY.', 1, null, null, null, true);
+                $message = $this->l('Minimalna wartość pozostałych produktów w koszyku przy zakupie biletu to ') . Tools::displayPrice($configuredMinAmount, $this->context->currency) . $this->l('. Obecnie jest to ') . Tools::displayPrice($valueExcludingTargetProductWithTax, $this->context->currency) . $this->l('. Dodaj więcej produktów, aby kontynuować.');
             }
-        } else {
-             PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - Docelowy produkt NIE ZNALEZIONY w koszyku. Brak restrykcji.', 1, null, null, null, true);
         }
-        
         $this->context->smarty->assign([
             'showMinAmountMessageMWZP' => $showMinAmountMessage,
             'minAmountMessageMWZP' => $message,
         ]);
-        PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - Zmienne przypisane do Smarty. showMinAmountMessageMWZP: ' . ($showMinAmountMessage ? 'true' : 'false'), 1, null, null, null, true);
-        PrestaShopLogger::addLog('MWZP hookDisplayShoppingCartFooter - KONIEC.', 1, null, null, null, true);
-
         return $this->display(__FILE__, 'views/templates/hook/display_cart_check.tpl');
     }
 }
